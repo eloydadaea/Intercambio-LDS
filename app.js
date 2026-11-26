@@ -15,7 +15,46 @@
   const $ = s => document.querySelector(s);
   const EMPTY_TXT = $('#empty').textContent;
 
-  /* ---------- Servidor (Google Sheets vía Apps Script) ---------- */
+  /* ---------- Barra de carga ---------- */
+  const loaderStyle = document.createElement('style');
+  loaderStyle.textContent = `
+    .ld-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(280px,82vw);margin:6px auto 0}
+    .ld-txt{font-size:.95rem;color:#f4f7fb;text-shadow:0 1px 4px rgba(0,0,0,.75);letter-spacing:.2px}
+    .ld-track{width:100%;height:10px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.45),0 1px 6px rgba(0,0,0,.35);backdrop-filter:blur(4px)}
+    .ld-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#e04a4a,#ffd54a,#2f9e5b);background-size:200% 100%;animation:ldShimmer 1.6s linear infinite;transition:width .25s ease-out}
+    @keyframes ldShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+  `;
+  document.head.appendChild(loaderStyle);
+
+  let loadTimer = null;
+  function startLoader(){
+    const el = $('#empty');
+    el.innerHTML = `
+      <div class="ld-wrap" role="progressbar" aria-label="Cargando regalos" aria-valuemin="0" aria-valuemax="100">
+        <span class="ld-txt">Cargando regalos…</span>
+        <div class="ld-track"><div class="ld-fill" id="ldFill"></div></div>
+      </div>`;
+    el.hidden = false;
+    let pct = 8;
+    const fill = $('#ldFill');
+    if (fill) fill.style.width = pct + '%';
+    clearInterval(loadTimer);
+    loadTimer = setInterval(() => {
+      pct += (88 - pct) * 0.14;
+      const f = $('#ldFill');
+      if (f) f.style.width = pct.toFixed(1) + '%';
+    }, 180);
+  }
+
+  function finishLoader(ok){
+    clearInterval(loadTimer);
+    if (!ok) return Promise.resolve();
+    const f = $('#ldFill');
+    if (f) f.style.width = '100%';
+    return new Promise(r => setTimeout(r, 240));
+  }
+
+  /* ---------- Servidor (Google Sheets + Drive vía Apps Script) ---------- */
   const api = {
     async get(){ const r = await fetch(API_URL); return r.json(); },
     // text/plain evita el preflight CORS que Apps Script no soporta
@@ -32,13 +71,16 @@
     if(on){ btn.dataset.t=btn.textContent; btn.textContent=txt; btn.disabled=true; }
     else { btn.textContent=btn.dataset.t||btn.textContent; btn.disabled=false; }
   }
-  async function load(){
+  async function load(showBar = false){
+    if (showBar) startLoader();
     try{
       const d = await api.get();
       if(!d.ok) throw new Error(d.error);
       people = d.people.map(p=>({...p,id:p.name}));
       names = d.names;
+      if (showBar) await finishLoader(true);
     }catch{
+      if (showBar) await finishLoader(false);
       $('#empty').textContent='No se pudo cargar. Revisa tu conexión y recarga la página.';
       $('#empty').hidden=false; return false;
     }
@@ -79,7 +121,7 @@
     people.forEach((p,i)=>{
       const b = document.createElement('button');
       b.className='gift'; const pp = PAPERS[Math.floor(rnd(p.id,1)*PAPERS.length)];
-      const w = Math.round(56 + rnd(p.id,2)*56), h = Math.round(46 + rnd(p.id,3)*74);   // anchos y altos independientes
+      const w = Math.round(56 + rnd(p.id,2)*56), h = Math.round(46 + rnd(p.id,3)*74);
       const st = b.style;
       st.setProperty('--w',w+'px'); st.setProperty('--h',h+'px'); st.setProperty('--k',(w/80).toFixed(2));
       st.setProperty('--p',pp.p); st.setProperty('--pat',pp.pat); st.setProperty('--ps',pp.ps);
@@ -136,31 +178,21 @@
   };
 
   /* ---------- Formulario ---------- */
-  // Compresión adaptativa: aprovecha al máximo el límite de 50 000 caracteres por celda en Google Sheets
-  function compress(file, max=1100){
+  function optimizeImage(file, max=1600){
     return new Promise((res,rej)=>{
       const img = new Image(), url = URL.createObjectURL(file);
       img.onload=()=>{
-        const LIMIT = 49000;
-        let k = Math.min(1, max/Math.max(img.width,img.height)), out='';
+        const k = Math.min(1, max/Math.max(img.width,img.height));
         const c = document.createElement('canvas');
+        c.width = Math.max(1,Math.round(img.width*k));
+        c.height = Math.max(1,Math.round(img.height*k));
         const ctx = c.getContext('2d');
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-
-        const qualities = [0.82, 0.72, 0.62, 0.52];
-        outer: for(let step=0;step<7;step++){
-          c.width = Math.max(1,Math.round(img.width*k));
-          c.height = Math.max(1,Math.round(img.height*k));
-          ctx.drawImage(img,0,0,c.width,c.height);
-          for(const q of qualities){
-            out = c.toDataURL('image/jpeg',q);
-            if(out.length<=LIMIT) break outer;
-          }
-          k *= 0.82;
-        }
+        ctx.drawImage(img,0,0,c.width,c.height);
+        const out = c.toDataURL('image/jpeg', 0.88);
         URL.revokeObjectURL(url);
-        out.length<=LIMIT ? res(out) : rej(new Error('Imagen muy pesada'));
+        res(out);
       };
       img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
       img.src=url;
@@ -188,7 +220,7 @@
     n.querySelector('.f').onchange=async e=>{
       const f = e.target.files[0]; if(!f) return;
       try{
-        const d = await compress(f); n.dataset.photo=d;
+        const d = await optimizeImage(f); n.dataset.photo=d;
         const pv = n.querySelector('.prev'); pv.src=d; pv.hidden=false;
       }catch{ alert('No se pudo leer esa imagen.'); }
     };
@@ -239,6 +271,5 @@
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
   document.querySelectorAll('dialog:not(.photo)').forEach(d=>d.addEventListener('click',e=>{ if(e.target===d) d.close(); }));
 
-  $('#empty').textContent='Cargando regalos…'; $('#empty').hidden=false;
-  load();
+  load(true);
 })();
