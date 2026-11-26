@@ -2,6 +2,14 @@
   /* ===== Pega aquí la URL de tu Apps Script (termina en /exec) ===== */
   const API_URL = 'https://script.google.com/macros/s/AKfycbyFssSXFPO1qPPXybpC6hnF6iy6tDo3iiNDhLPbQEOqx2-XV4kJ7FW3O2y47-ZF3c_h/exec';
 
+  /* ===== Lista de villancicos reales (.mp3 en la carpeta /music) ===== */
+  const CAROLS = [
+    { title: 'Campana sobre campana', src: './music/campana.mp3' },
+    { title: 'Los peces en el río',   src: './music/peces.mp3' },
+    { title: 'Mi burrito sabanero',   src: './music/burrito.mp3' },
+    { title: 'Noche de paz',          src: './music/noche-de-paz.mp3' }
+  ];
+
   const PAPERS = [
     {p:'#2a7fa8',pat:'radial-gradient(circle at 25% 30%,#ffffff55 2.5px,transparent 3.5px),radial-gradient(circle at 75% 70%,#ffd54a88 2.5px,transparent 3.5px)',ps:'20px 20px',r:['#e6b93c','#ffd54a']},
     {p:'#9b2fb5',pat:'linear-gradient(45deg,#ffffff26 25%,transparent 25% 75%,#ffffff26 75%),linear-gradient(-45deg,#ffffff1a 25%,transparent 25% 75%,#ffffff1a 75%)',ps:'16px 16px',r:['#b9c2cf','#d9dee6']},
@@ -15,194 +23,161 @@
   const $ = s => document.querySelector(s);
   const EMPTY_TXT = $('#empty').textContent;
 
-  /* ---------- Cajita de música navideña (Web Audio API) ---------- */
-  const N = {
-    C4:261.63, D4:293.66, E4:329.63, F4:349.23, Fs4:369.99, G4:392.00, A4:440.00, B4:493.88,
-    C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, R:0
-  };
-  const CAROLS = [
-    {
-      title: 'Noche de Paz',
-      tempo: 390,
-      notes: [
-        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
-        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
-        [N.D5,2],[N.D5,1],[N.B4,3],
-        [N.C5,2],[N.C5,1],[N.G4,3],
-        [N.A4,2],[N.A4,1],[N.C5,1.5],[N.B4,.5],[N.A4,1],
-        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
-        [N.A4,2],[N.A4,1],[N.C5,1.5],[N.B4,.5],[N.A4,1],
-        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
-        [N.D5,2],[N.D5,1],[N.F5,1.5],[N.D5,.5],[N.B4,1],
-        [N.C5,3],[N.E5,3],
-        [N.C5,1.5],[N.G4,.5],[N.E4,1],[N.G4,1.5],[N.F4,.5],[N.D4,1],[N.C4,4],[N.R,2]
-      ]
-    },
-    {
-      title: 'Jingle Bells',
-      tempo: 260,
-      notes: [
-        [N.E5,1],[N.E5,1],[N.E5,2],[N.E5,1],[N.E5,1],[N.E5,2],
-        [N.E5,1],[N.G5,1],[N.C5,1.5],[N.D5,.5],[N.E5,4],
-        [N.F5,1],[N.F5,1],[N.F5,1.5],[N.F5,.5],[N.F5,1],[N.E5,1],[N.E5,1],[N.E5,.5],[N.E5,.5],
-        [N.E5,1],[N.D5,1],[N.D5,1],[N.E5,1],[N.D5,2],[N.G5,2],
-        [N.E5,1],[N.E5,1],[N.E5,2],[N.E5,1],[N.E5,1],[N.E5,2],
-        [N.E5,1],[N.G5,1],[N.C5,1.5],[N.D5,.5],[N.E5,4],
-        [N.F5,1],[N.F5,1],[N.F5,1.5],[N.F5,.5],[N.F5,1],[N.E5,1],[N.E5,1],[N.E5,.5],[N.E5,.5],
-        [N.G5,1],[N.G5,1],[N.F5,1],[N.D5,1],[N.C5,4],[N.R,2]
-      ]
-    },
-    {
-      title: 'Feliz Navidad',
-      tempo: 300,
-      notes: [
-        [N.D4,1],[N.G4,1],[N.G4,.5],[N.A4,.5],[N.G4,.5],[N.Fs4,.5],[N.E4,1],[N.E4,1],
-        [N.E4,1],[N.A4,1],[N.A4,.5],[N.B4,.5],[N.A4,.5],[N.G4,.5],[N.Fs4,1],[N.D4,1],
-        [N.D4,1],[N.B4,1],[N.B4,.5],[N.C5,.5],[N.B4,.5],[N.A4,.5],[N.G4,1],[N.E4,1],
-        [N.D4,.5],[N.D4,.5],[N.E4,1],[N.A4,1],[N.Fs4,1],[N.G4,3],[N.R,2]
-      ]
-    }
-  ];
+  /* ---------- Ocultar contenido hasta iniciar sesión ---------- */
+  const topEl = $('.top');
+  const stageEl = $('.stage');
+  topEl.hidden = true;
+  stageEl.hidden = true;
 
-  let audioCtx = null, masterGain = null, musicTimer = null;
-  let musicPlaying = false, userMuted = false, songIdx = 0, noteIdx = 0;
+  const gateStyle = document.createElement('style');
+  gateStyle.textContent = `
+    .gate{
+      position:fixed;inset:0;z-index:50;
+      display:grid;place-items:center;padding:16px;
+      background:rgba(8,15,30,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    }
+    .gate[hidden]{display:none}
+    .gate-card{
+      width:min(410px,94vw);padding:28px 26px;border-radius:16px;
+      background:var(--paper,#faf6ef);color:var(--card-ink,#231f1c);
+      border:1px solid var(--paper-border,#dfd6c5);
+      box-shadow:0 24px 60px rgba(0,0,0,.55);
+      outline:1px solid rgba(181,43,39,.14);outline-offset:-7px;
+      animation:dlgIn .22s ease-out;
+    }
+    .gate-card h2{
+      margin:0;font-family:var(--font-serif,Georgia,serif);
+      font-size:1.55rem;color:var(--card-ink,#231f1c);
+    }
+    .gate-card .sub{margin:6px 0 18px;color:var(--card-muted,#6b6359);font-size:.92rem}
+    .gate-actions{display:flex;justify-content:flex-end;margin-top:18px}
+    .gate-actions .btn{width:100%}
+    .user-bar{
+      display:inline-flex;align-items:center;gap:10px;margin-bottom:10px;
+      padding:5px 12px;border-radius:999px;font-size:.82rem;
+      background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:var(--ink,#f6f3ed);
+    }
+    .user-bar button{
+      border:0;background:none;color:var(--gold,#d4a73c);font:inherit;font-weight:600;
+      cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;
+    }
+  `;
+  document.head.appendChild(gateStyle);
+
+  const gate = document.createElement('div');
+  gate.className = 'gate';
+  gate.innerHTML = `
+    <form class="gate-card" id="gateForm">
+      <h2>Intercambio navideño</h2>
+      <p class="sub">Elige tu nombre e ingresa tu contraseña para entrar.</p>
+      <label class="field">¿Quién eres?
+        <select id="gName" required disabled>
+          <option value="">Cargando participantes…</option>
+        </select>
+      </label>
+      <label class="field">Contraseña
+        <input id="gPass" type="password" required autocomplete="current-password" placeholder="Tu clave secreta">
+      </label>
+      <p class="err" id="gateErr" hidden></p>
+      <div class="gate-actions">
+        <button type="submit" class="btn primary" id="gSubmit" disabled>Entrar</button>
+      </div>
+    </form>
+  `;
+  document.body.appendChild(gate);
+
+  // Barra discreta con el usuario conectado
+  const userBar = document.createElement('div');
+  userBar.className = 'user-bar';
+  userBar.hidden = true;
+  userBar.innerHTML = `<span id="loggedName"></span> · <button type="button" id="btnLogout">Cambiar usuario</button>`;
+  topEl.insertBefore(userBar, topEl.firstChild);
+
+  let authUser = null; // { name, password }
+
+  /* ---------- Reproductor de villancicos (.mp3) ---------- */
+  const player = new Audio();
+  player.volume = 0.45;
+  player.preload = 'auto';
+
+  let songIdx = 0;
+  let userMuted = false;
+  let failedCount = 0;
 
   const musicBox = document.createElement('div');
   musicBox.className = 'music-ctl';
   musicBox.innerHTML = `
-    <button type="button" class="music-btn" id="btnMusic" aria-label="Música navideña">🔇 Activar música</button>
+    <button type="button" class="music-btn" id="btnMusic" aria-label="Música navideña">Activar música</button>
     <button type="button" class="music-btn music-skip" id="btnNextSong" title="Siguiente villancico" hidden>⏭</button>
   `;
   document.body.appendChild(musicBox);
 
   function updateMusicUI(){
     const btn = $('#btnMusic'), skip = $('#btnNextSong');
-    if (musicPlaying){
-      btn.textContent = `🎵 ${CAROLS[songIdx].title}`;
-      skip.hidden = false;
+    const playing = !player.paused && !player.ended && player.currentSrc;
+    if (playing){
+      btn.textContent = `♪ ${CAROLS[songIdx].title}`;
+      skip.hidden = CAROLS.length <= 1;
     } else {
-      btn.textContent = '🔇 Activar música';
+      btn.textContent = 'Activar música';
       skip.hidden = true;
     }
   }
 
-  function initAudio(){
-    if (audioCtx) return;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    audioCtx = new AC();
-
-    const delay = audioCtx.createDelay();
-    delay.delayTime.value = 0.26;
-    const feedback = audioCtx.createGain();
-    feedback.gain.value = 0.22;
-    delay.connect(feedback);
-    feedback.connect(delay);
-
-    masterGain = audioCtx.createGain();
-    masterGain.gain.value = 0.14;
-    masterGain.connect(audioCtx.destination);
-    masterGain.connect(delay);
-    delay.connect(audioCtx.destination);
-  }
-
-  function playChime(freq, durSec){
-    if (!audioCtx || !freq) return;
-    const now = audioCtx.currentTime;
-    const osc1 = audioCtx.createOscillator();
-    const osc2 = audioCtx.createOscillator();
-    const env = audioCtx.createGain();
-
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(freq, now);
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(freq * 2, now);
-
-    const subGain = audioCtx.createGain();
-    subGain.gain.value = 0.18;
-
-    env.gain.setValueAtTime(0.0001, now);
-    env.gain.exponentialRampToValueAtTime(0.85, now + 0.018);
-    env.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.35, durSec * 1.45));
-
-    osc1.connect(env);
-    osc2.connect(subGain);
-    subGain.connect(env);
-    env.connect(masterGain);
-
-    osc1.start(now);
-    osc2.start(now);
-    const stopAt = now + Math.max(0.4, durSec * 1.5);
-    osc1.stop(stopAt);
-    osc2.stop(stopAt);
-  }
-
-  function scheduleNextNote(){
-    clearTimeout(musicTimer);
-    if (!musicPlaying || document.hidden) return;
-    const song = CAROLS[songIdx];
-    const [freq, beats] = song.notes[noteIdx];
-    const ms = beats * song.tempo;
-
-    playChime(freq, ms / 1000);
-
-    noteIdx++;
-    if (noteIdx >= song.notes.length){
-      noteIdx = 0;
-      songIdx = (songIdx + 1) % CAROLS.length;
+  async function playCarol(idx = songIdx){
+    if (!CAROLS.length) return;
+    songIdx = (idx + CAROLS.length) % CAROLS.length;
+    const targetSrc = new URL(CAROLS[songIdx].src, location.href).href;
+    if (player.src !== targetSrc) {
+      player.src = CAROLS[songIdx].src;
+    }
+    try {
+      await player.play();
+      failedCount = 0;
+      updateMusicUI();
+    } catch {
       updateMusicUI();
     }
-    musicTimer = setTimeout(scheduleNextNote, ms);
   }
 
-  async function startMusic(){
-    if (userMuted) return;
-    initAudio();
-    if (!audioCtx) return;
-    if (audioCtx.state === 'suspended'){
-      try { await audioCtx.resume(); } catch { return; }
-    }
-    if (audioCtx.state !== 'running') return;
-    if (!musicPlaying){
-      musicPlaying = true;
+  player.onended = () => {
+    failedCount = 0;
+    playCarol(songIdx + 1);
+  };
+
+  player.onerror = () => {
+    failedCount++;
+    if (failedCount < CAROLS.length) {
+      playCarol(songIdx + 1);
+    } else {
       updateMusicUI();
-      scheduleNextNote();
     }
-  }
-
-  function stopMusic(){
-    musicPlaying = false;
-    clearTimeout(musicTimer);
-    updateMusicUI();
-  }
+  };
 
   $('#btnMusic').onclick = async e => {
     e.stopPropagation();
-    if (musicPlaying){
+    if (!player.paused){
       userMuted = true;
-      stopMusic();
+      player.pause();
+      updateMusicUI();
     } else {
       userMuted = false;
-      await startMusic();
+      failedCount = 0;
+      await playCarol(songIdx);
     }
   };
 
   $('#btnNextSong').onclick = async e => {
     e.stopPropagation();
-    clearTimeout(musicTimer);
-    songIdx = (songIdx + 1) % CAROLS.length;
-    noteIdx = 0;
     userMuted = false;
-    if (!musicPlaying) await startMusic();
-    else { updateMusicUI(); scheduleNextNote(); }
+    failedCount = 0;
+    await playCarol(songIdx + 1);
   };
 
   ['pointerdown','keydown'].forEach(ev => {
-    document.addEventListener(ev, () => { if (!userMuted && !musicPlaying) startMusic(); }, { once: true });
-  });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) clearTimeout(musicTimer);
-    else if (musicPlaying) scheduleNextNote();
+    document.addEventListener(ev, () => {
+      if (!userMuted && player.paused) playCarol(songIdx);
+    }, { once: true });
   });
 
   /* ---------- Barra de carga ---------- */
@@ -237,7 +212,6 @@
   /* ---------- Servidor (Google Sheets + Drive vía Apps Script) ---------- */
   const api = {
     async get(){ const r = await fetch(API_URL); return r.json(); },
-    // text/plain evita el preflight CORS que Apps Script no soporta
     async post(body){ const r = await fetch(API_URL,{method:'POST',body:JSON.stringify(body)}); return r.json(); }
   };
   let people = [];           // [{id,name,items}]
@@ -251,6 +225,93 @@
     if(on){ btn.dataset.t=btn.textContent; btn.textContent=txt; btn.disabled=true; }
     else { btn.textContent=btn.dataset.t||btn.textContent; btn.disabled=false; }
   }
+
+  function fillGateSelect(){
+    const sel = $('#gName');
+    sel.innerHTML = '<option value="">Elige tu nombre…</option>' +
+      names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    sel.disabled = false;
+    $('#gSubmit').disabled = false;
+  }
+
+  function unlockApp(user){
+    authUser = user;
+    sessionStorage.setItem('arbol_auth', JSON.stringify(user));
+    gate.hidden = true;
+    topEl.hidden = false;
+    stageEl.hidden = false;
+    userBar.hidden = false;
+    $('#loggedName').textContent = `Hola, ${user.name}`;
+    updateMainActionBtn();
+  }
+
+  function updateMainActionBtn(){
+    if (!authUser) return;
+    const miLista = people.find(x => x.id === authUser.name);
+    $('#btnAdd').textContent = miLista ? 'Editar mi lista' : '+ Agregar mi lista';
+  }
+
+  $('#btnLogout').onclick = () => {
+    sessionStorage.removeItem('arbol_auth');
+    authUser = null;
+    editPass = '';
+    topEl.hidden = true;
+    stageEl.hidden = true;
+    userBar.hidden = true;
+    $('#gPass').value = '';
+    $('#gateErr').hidden = true;
+    gate.hidden = false;
+    $('#gName').focus();
+  };
+
+  $('#gateForm').onsubmit = async e => {
+    e.preventDefault();
+    const name = $('#gName').value.trim();
+    const pw = $('#gPass').value;
+    if (!name || !pw) return;
+    const btn = $('#gSubmit');
+    $('#gateErr').hidden = true;
+    setBusy(btn, true, 'Verificando…');
+    try {
+      const r = await api.post({ action: 'check', name, password: pw });
+      if (r.ok) {
+        unlockApp({ name, password: pw });
+        if (!userMuted && player.paused) playCarol(songIdx);
+        await load(true);
+      } else {
+        showErr('#gateErr', r.error === 'clave' ? 'Contraseña incorrecta.' : 'Error del servidor. Intenta de nuevo.');
+      }
+    } catch {
+      showErr('#gateErr', 'No hay conexión con el servidor.');
+    }
+    setBusy(btn, false);
+  };
+
+  async function initGate(){
+    // Revisa si ya inició sesión en esta pestaña
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('arbol_auth') || 'null');
+      if (saved && saved.name && saved.password) {
+        const check = await api.post({ action: 'check', name: saved.name, password: saved.password });
+        if (check.ok) {
+          unlockApp(saved);
+          await load(true);
+          return;
+        }
+      }
+    } catch {}
+
+    // Si no hay sesión válida, carga solo los nombres para el desplegable del login
+    try {
+      const d = await api.get();
+      if (!d.ok) throw new Error(d.error);
+      names = d.names;
+      fillGateSelect();
+    } catch {
+      showErr('#gateErr', 'No se pudo conectar con el servidor. Recarga la página.');
+    }
+  }
+
   async function load(showBar = false){
     if (showBar) startLoader();
     try{
@@ -265,6 +326,7 @@
       $('#empty').hidden=false; return false;
     }
     $('#empty').textContent = EMPTY_TXT;
+    updateMainActionBtn();
     renderGifts(); return true;
   }
 
@@ -323,6 +385,9 @@
     currentId=id;
     $('#viewName').textContent = p.name;
     $('#viewCount').textContent = p.items.length===1 ? '1 regalo en su lista' : `${p.items.length} regalos en su lista`;
+    // Solo muestra el botón "Editar mi lista" si la lista pertenece al usuario conectado
+    $('#btnEdit').hidden = !authUser || authUser.name !== p.name;
+
     const wrap = $('#viewItems'); wrap.innerHTML='';
     p.items.forEach(it=>{
       const d = document.createElement('div'); d.className='item';
@@ -352,12 +417,17 @@
   }
   $('#photoDlg').onclick=()=>$('#photoDlg').close();
 
-  /* ---------- Editar (pide contraseña al servidor) ---------- */
+  /* ---------- Editar (usa la sesión activa o pide contraseña) ---------- */
   let pendingEditId = null;
   $('#btnEdit').onclick=()=>{
     const p = people.find(x=>x.id===currentId); if(!p) return;
-    pendingEditId = p.id;
     $('#viewDlg').close();
+    if (authUser && authUser.name === p.name) {
+      editPass = authUser.password;
+      openForm(p.id);
+      return;
+    }
+    pendingEditId = p.id;
     $('#passSub').textContent = `Escribe la contraseña de ${p.name} para editar esta lista.`;
     $('#pPass').value=''; $('#passErr').hidden=true;
     $('#passDlg').showModal(); $('#pPass').focus();
@@ -426,23 +496,37 @@
   }
 
   function openForm(id=null){
-    editingId=id; if(!id) editPass='';
-    const p = id ? people.find(x=>x.id===id) : null;
+    const targetName = id || (authUser ? authUser.name : null);
+    const p = targetName ? people.find(x=>x.id===targetName) : null;
+    editingId = p ? p.id : null;
+    if (authUser && authUser.name === targetName) editPass = authUser.password;
+
     $('#formTitle').textContent = p ? 'Editar mi lista' : 'Mi lista de regalos';
-    const sel = $('#fName'), taken = new Set(people.map(x=>x.name));
-    sel.innerHTML = '<option value="">Elige tu nombre…</option>' +
-      names.filter(n => p ? n===p.name : !taken.has(n))
-        .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    sel.value = p ? p.name : ''; sel.disabled = !!p;
-    $('#passWrap').hidden = !!p; $('#fPass').required = !p; $('#fPass').value='';
+    const sel = $('#fName');
+    if (authUser) {
+      sel.innerHTML = `<option value="${esc(authUser.name)}">${esc(authUser.name)}</option>`;
+      sel.value = authUser.name;
+      sel.disabled = true;
+      $('#passWrap').hidden = true;
+      $('#fPass').required = false;
+    } else {
+      const taken = new Set(people.map(x=>x.name));
+      sel.innerHTML = '<option value="">Elige tu nombre…</option>' +
+        names.filter(n => p ? n===p.name : !taken.has(n))
+          .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      sel.value = p ? p.name : ''; sel.disabled = !!p;
+      $('#passWrap').hidden = !!p; $('#fPass').required = !p;
+    }
+    $('#fPass').value='';
     $('#formErr').hidden = true;
     $('#formItems').innerHTML='';
     (p ? p.items : [{}]).forEach(addFormItem);
     $('#formDlg').showModal();
   }
+
   $('#btnAdd').onclick=()=>{
     if(!names.length){ alert('Aún no se cargan los datos. Espera un momento e intenta de nuevo.'); return; }
-    openForm();
+    openForm(authUser ? authUser.name : null);
   };
   $('#btnMore').onclick=()=>addFormItem();
 
@@ -455,7 +539,9 @@
     })).filter(i=>i.title);
     const name = $('#fName').value.trim();
     if(!name || !items.length) return;
-    const password = editingId ? editPass : $('#fPass').value;
+    const password = (authUser && authUser.name === name)
+      ? authUser.password
+      : (editingId ? editPass : $('#fPass').value);
     const btn = $('#form button[type=submit]');
     $('#formErr').hidden=true; setBusy(btn,true,'Guardando…');
     try{
@@ -469,5 +555,5 @@
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
   document.querySelectorAll('dialog:not(.photo)').forEach(d=>d.addEventListener('click',e=>{ if(e.target===d) d.close(); }));
 
-  load(true);
+  initGate();
 })();
