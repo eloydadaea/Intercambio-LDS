@@ -15,16 +15,224 @@
   const $ = s => document.querySelector(s);
   const EMPTY_TXT = $('#empty').textContent;
 
-  /* ---------- Barra de carga ---------- */
-  const loaderStyle = document.createElement('style');
-  loaderStyle.textContent = `
+  /* ---------- Estilos mejorados (Barra de carga + Modales Dark Glassmorphism) ---------- */
+  const uiStyle = document.createElement('style');
+  uiStyle.textContent = `
+    /* Barra de carga */
     .ld-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(280px,82vw);margin:6px auto 0}
     .ld-txt{font-size:.95rem;color:#f4f7fb;text-shadow:0 1px 4px rgba(0,0,0,.75);letter-spacing:.2px}
     .ld-track{width:100%;height:10px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.45),0 1px 6px rgba(0,0,0,.35);backdrop-filter:blur(4px)}
     .ld-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#e04a4a,#ffd54a,#2f9e5b);background-size:200% 100%;animation:ldShimmer 1.6s linear infinite;transition:width .25s ease-out}
     @keyframes ldShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+    /* Modales navideños Dark Glassmorphism */
+    dialog:not(.photo){
+      background:linear-gradient(165deg,rgba(22,31,52,.94),rgba(13,19,34,.97)) !important;
+      color:#f8fafc !important;
+      border:1px solid rgba(255,255,255,.15) !important;
+      border-radius:22px !important;
+      box-shadow:0 24px 60px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.12) !important;
+      backdrop-filter:blur(18px);
+      -webkit-backdrop-filter:blur(18px);
+      animation:dlgPop .22s cubic-bezier(.2,.8,.2,1);
+    }
+    dialog::backdrop{
+      background:rgba(6,10,20,.68) !important;
+      backdrop-filter:blur(5px);
+      -webkit-backdrop-filter:blur(5px);
+    }
+    @keyframes dlgPop{
+      from{opacity:0;transform:translateY(10px) scale(.97)}
+      to{opacity:1;transform:translateY(0) scale(1)}
+    }
+
+    /* Encabezados y botón cerrar */
+    dialog h2, #viewName, #formTitle{
+      color:#fff !important;
+      letter-spacing:-.2px;
+    }
+    #viewCount, #passSub{
+      color:#94a3b8 !important;
+      font-size:.9rem !important;
+    }
+    dialog [data-close]{
+      width:34px !important;
+      height:34px !important;
+      padding:0 !important;
+      border-radius:50% !important;
+      border:1px solid rgba(255,255,255,.16) !important;
+      background:rgba(255,255,255,.08) !important;
+      color:#e2e8f0 !important;
+      font-size:1.1rem !important;
+      line-height:1 !important;
+      display:inline-flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      cursor:pointer;
+      transition:background .18s,transform .18s,color .18s;
+    }
+    dialog [data-close]:hover{
+      background:rgba(239,68,68,.24) !important;
+      border-color:rgba(248,113,113,.45) !important;
+      color:#fff !important;
+      transform:scale(1.06);
+    }
+
+    /* Lista de regalos dentro del modal */
+    #viewItems{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      margin:16px 0 18px;
+    }
+    #viewItems .item{
+      display:flex !important;
+      align-items:center !important;
+      gap:14px !important;
+      padding:12px 14px !important;
+      background:rgba(255,255,255,.06) !important;
+      border:1px solid rgba(255,255,255,.11) !important;
+      border-radius:16px !important;
+      transition:background .18s,border-color .18s,transform .18s;
+    }
+    #viewItems .item:hover{
+      background:rgba(255,255,255,.09) !important;
+      border-color:rgba(255,213,74,.32) !important;
+    }
+    .thumb-wrap{
+      position:relative;
+      width:76px;
+      height:76px;
+      border-radius:13px;
+      overflow:hidden;
+      flex-shrink:0;
+      cursor:zoom-in;
+      border:1px solid rgba(255,255,255,.16);
+      box-shadow:0 6px 16px rgba(0,0,0,.35);
+      background:#0f172a;
+    }
+    .thumb-wrap img{
+      width:100% !important;
+      height:100% !important;
+      object-fit:cover !important;
+      display:block;
+      transition:transform .25s ease;
+    }
+    .thumb-wrap:hover img{transform:scale(1.07)}
+    .zoom-badge{
+      position:absolute;
+      right:5px;
+      bottom:5px;
+      width:22px;
+      height:22px;
+      border-radius:50%;
+      background:rgba(15,23,42,.82);
+      border:1px solid rgba(255,255,255,.22);
+      font-size:11px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter:blur(4px);
+    }
+    #viewItems .ph{
+      width:76px !important;
+      height:76px !important;
+      border-radius:13px !important;
+      background:linear-gradient(135deg,rgba(255,213,74,.16),rgba(224,74,74,.16)) !important;
+      border:1px solid rgba(255,255,255,.12) !important;
+      display:flex !important;
+      align-items:center !important;
+      justify-content:center !important;
+      font-size:1.75rem !important;
+      flex-shrink:0;
+    }
+    #viewItems .item h3{
+      margin:0 0 4px !important;
+      font-size:1.03rem !important;
+      font-weight:700 !important;
+      color:#f8fafc !important;
+    }
+    #viewItems .item p{
+      margin:0 !important;
+      font-size:.9rem !important;
+      line-height:1.42 !important;
+      color:#cbd5e1 !important;
+      word-break:break-word;
+    }
+    #viewItems .item a{
+      color:#ffd54a !important;
+      text-decoration:underline;
+      text-underline-offset:3px;
+    }
+
+    /* Botón Editar mi lista */
+    #btnEdit{
+      background:rgba(255,255,255,.09) !important;
+      color:#f8fafc !important;
+      border:1px solid rgba(255,255,255,.2) !important;
+      border-radius:999px !important;
+      padding:9px 18px !important;
+      font-weight:600 !important;
+      cursor:pointer;
+      transition:all .18s ease;
+    }
+    #btnEdit:hover{
+      background:rgba(255,213,74,.18) !important;
+      border-color:rgba(255,213,74,.55) !important;
+      color:#ffd54a !important;
+    }
+
+    /* Campos de formulario y contraseña en modo oscuro */
+    dialog .field{color:#e2e8f0 !important}
+    dialog input:not([type=file]), dialog select, dialog textarea{
+      background:rgba(15,23,42,.75) !important;
+      color:#f8fafc !important;
+      border:1px solid rgba(255,255,255,.18) !important;
+      border-radius:12px !important;
+    }
+    dialog input:focus, dialog select:focus, dialog textarea:focus{
+      outline:none !important;
+      border-color:#ffd54a !important;
+      box-shadow:0 0 0 3px rgba(255,213,74,.18) !important;
+    }
+    .fitem{
+      background:rgba(255,255,255,.05) !important;
+      border:1px solid rgba(255,255,255,.12) !important;
+      border-radius:16px !important;
+    }
+
+    /* Visor de foto ampliada */
+    dialog.photo{
+      background:transparent !important;
+      border:none !important;
+      box-shadow:none !important;
+      padding:16px !important;
+      max-width:min(94vw,760px) !important;
+      text-align:center;
+      animation:dlgPop .2s ease-out;
+    }
+    dialog.photo img{
+      max-height:78vh !important;
+      max-width:100% !important;
+      border-radius:16px !important;
+      border:1px solid rgba(255,255,255,.2) !important;
+      box-shadow:0 24px 60px rgba(0,0,0,.8) !important;
+      display:block;
+      margin:0 auto;
+    }
+    .photo-cap{
+      margin-top:12px;
+      display:inline-block;
+      padding:7px 16px;
+      border-radius:999px;
+      background:rgba(15,23,42,.86);
+      border:1px solid rgba(255,255,255,.16);
+      color:#f8fafc;
+      font-size:.9rem;
+      backdrop-filter:blur(8px);
+    }
   `;
-  document.head.appendChild(loaderStyle);
+  document.head.appendChild(uiStyle);
 
   let loadTimer = null;
   function startLoader(){
@@ -136,6 +344,8 @@
   }
 
   /* ---------- Ver lista ---------- */
+  $('#btnEdit').textContent = '✏️ Editar mi lista';
+
   function openView(id){
     const p = people.find(x=>x.id===id); if(!p) return;
     currentId=id;
@@ -144,14 +354,30 @@
     const wrap = $('#viewItems'); wrap.innerHTML='';
     p.items.forEach(it=>{
       const d = document.createElement('div'); d.className='item';
-      d.innerHTML = (it.photo ? `<img src="${esc(it.photo)}" alt="${esc(it.title)}">` : `<div class="ph">🎀</div>`) +
-        `<div><h3>${esc(it.title)}</h3>${it.note?`<p>${linkify(it.note)}</p>`:''}</div>`;
-      const img = d.querySelector('img'); if(img) img.onclick=()=>showPhoto(it.photo,it.title);
+      const photoHtml = it.photo
+        ? `<div class="thumb-wrap" title="Toca para ampliar"><img src="${esc(it.photo)}" alt="${esc(it.title)}"><span class="zoom-badge">🔍</span></div>`
+        : `<div class="ph">🎀</div>`;
+      d.innerHTML = `${photoHtml}<div><h3>${esc(it.title)}</h3>${it.note?`<p>${linkify(it.note)}</p>`:''}</div>`;
+      const thumb = d.querySelector('.thumb-wrap');
+      if(thumb) thumb.onclick=()=>showPhoto(it.photo,it.title);
       wrap.appendChild(d);
     });
     $('#viewDlg').showModal();
   }
-  function showPhoto(src,alt){ $('#bigPhoto').src=src; $('#bigPhoto').alt=alt; $('#photoDlg').showModal(); }
+
+  function showPhoto(src,alt){
+    const dlg = $('#photoDlg');
+    $('#bigPhoto').src=src;
+    $('#bigPhoto').alt=alt;
+    let cap = dlg.querySelector('.photo-cap');
+    if(!cap){
+      cap = document.createElement('div');
+      cap.className = 'photo-cap';
+      dlg.appendChild(cap);
+    }
+    cap.textContent = `${alt} · Toca para cerrar`;
+    dlg.showModal();
+  }
   $('#photoDlg').onclick=()=>$('#photoDlg').close();
 
   /* ---------- Editar (pide contraseña al servidor) ---------- */
