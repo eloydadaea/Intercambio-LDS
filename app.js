@@ -1,17 +1,7 @@
 (() => {
-  const KEY = 'arbol-regalos-v2';
-  /* Lista de participantes y su contraseña (compártela en privado con cada uno) */
-  const ROSTER = {
-    'Daniel Degollar':  'DANIEL-3817',
-    'Mariano Lobaton':  'MARIANO-5426',
-    'Alexia Bazan':     'ALEXIA-7092',
-    'Amanda Candela':   'AMANDA-1634',
-    'Diego Villanueva': 'DIEGO-8275',
-    'Elias Monago':     'ELIAS-4953',
-    'Evander Rodríguez':'EVANDER-2368'
-  };
-  const passOk = (name,pw) => !!ROSTER[name] && String(pw).trim().toLowerCase() === ROSTER[name].toLowerCase();
-  function showErr(id,msg){ const e=$(id); e.textContent=msg; e.hidden=false; }
+  /* ===== Pega aquí la URL de tu Apps Script (termina en /exec) ===== */
+  const API_URL = 'PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT';
+
   const PAPERS = [
     {p:'#2a7fa8',pat:'radial-gradient(circle at 25% 30%,#ffffff55 2.5px,transparent 3.5px),radial-gradient(circle at 75% 70%,#ffd54a88 2.5px,transparent 3.5px)',ps:'20px 20px',r:['#e6b93c','#ffd54a']},
     {p:'#9b2fb5',pat:'linear-gradient(45deg,#ffffff26 25%,transparent 25% 75%,#ffffff26 75%),linear-gradient(-45deg,#ffffff1a 25%,transparent 25% 75%,#ffffff1a 75%)',ps:'16px 16px',r:['#b9c2cf','#d9dee6']},
@@ -23,18 +13,38 @@
     {p:'#e8892b',pat:'radial-gradient(circle at 50% 50%,#ffffff66 2px,transparent 3px)',ps:'14px 14px',r:['#7a2a8f','#9b2fb5']}
   ];
   const $ = s => document.querySelector(s);
+  const EMPTY_TXT = $('#empty').textContent;
 
-  /* ---------- Almacenamiento (único punto a cambiar si luego usas un servidor) ---------- */
-  const Store = {
-    load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || []; }catch{ return []; } },
-    save(list){
-      try{ localStorage.setItem(KEY, JSON.stringify(list)); return true; }
-      catch{ alert('No hay espacio para guardar. Prueba con fotos menos pesadas o menos fotos.'); return false; }
-    }
+  /* ---------- Servidor (Google Sheets vía Apps Script) ---------- */
+  const api = {
+    async get(){ const r = await fetch(API_URL); return r.json(); },
+    // text/plain evita el preflight CORS que Apps Script no soporta
+    async post(body){ const r = await fetch(API_URL,{method:'POST',body:JSON.stringify(body)}); return r.json(); }
   };
-  let people = Store.load();
+  let people = [];           // [{id,name,items}]
+  let names = [];            // nombres permitidos (hoja "Claves")
   let currentId = null;      // persona abierta en "ver"
   let editingId = null;      // persona en edición
+  let editPass = '';         // contraseña ya validada para guardar la edición
+
+  function showErr(id,msg){ const e=$(id); e.textContent=msg; e.hidden=false; }
+  function setBusy(btn,on,txt){
+    if(on){ btn.dataset.t=btn.textContent; btn.textContent=txt; btn.disabled=true; }
+    else { btn.textContent=btn.dataset.t||btn.textContent; btn.disabled=false; }
+  }
+  async function load(){
+    try{
+      const d = await api.get();
+      if(!d.ok) throw new Error(d.error);
+      people = d.people.map(p=>({...p,id:p.name}));
+      names = d.names;
+    }catch{
+      $('#empty').textContent='No se pudo cargar. Revisa tu conexión y recarga la página.';
+      $('#empty').hidden=false; return false;
+    }
+    $('#empty').textContent = EMPTY_TXT;
+    renderGifts(); return true;
+  }
 
   /* ---------- Nieve y luces ---------- */
   const snow = $('#snow');
@@ -92,7 +102,7 @@
     const wrap = $('#viewItems'); wrap.innerHTML='';
     p.items.forEach(it=>{
       const d = document.createElement('div'); d.className='item';
-      d.innerHTML = (it.photo ? `<img src="${it.photo}" alt="${esc(it.title)}">` : `<div class="ph">🎀</div>`) +
+      d.innerHTML = (it.photo ? `<img src="${esc(it.photo)}" alt="${esc(it.title)}">` : `<div class="ph">🎀</div>`) +
         `<div><h3>${esc(it.title)}</h3>${it.note?`<p>${linkify(it.note)}</p>`:''}</div>`;
       const img = d.querySelector('img'); if(img) img.onclick=()=>showPhoto(it.photo,it.title);
       wrap.appendChild(d);
@@ -102,6 +112,7 @@
   function showPhoto(src,alt){ $('#bigPhoto').src=src; $('#bigPhoto').alt=alt; $('#photoDlg').showModal(); }
   $('#photoDlg').onclick=()=>$('#photoDlg').close();
 
+  /* ---------- Editar (pide contraseña al servidor) ---------- */
   let pendingEditId = null;
   $('#btnEdit').onclick=()=>{
     const p = people.find(x=>x.id===currentId); if(!p) return;
@@ -111,23 +122,36 @@
     $('#pPass').value=''; $('#passErr').hidden=true;
     $('#passDlg').showModal(); $('#pPass').focus();
   };
-  $('#passForm').onsubmit=e=>{
+  $('#passForm').onsubmit=async e=>{
     e.preventDefault();
     const p = people.find(x=>x.id===pendingEditId); if(!p) return;
-    if(passOk(p.name, $('#pPass').value)){ $('#passDlg').close(); openForm(p.id); }
-    else showErr('#passErr','Contraseña incorrecta. Este no es tu regalo 🎁');
+    const pw = $('#pPass').value, btn = $('#passForm button[type=submit]');
+    $('#passErr').hidden=true; setBusy(btn,true,'Verificando…');
+    try{
+      const r = await api.post({action:'check',name:p.name,password:pw});
+      if(r.ok){ editPass=pw; $('#passDlg').close(); openForm(p.id); }
+      else showErr('#passErr', r.error==='clave' ? 'Contraseña incorrecta. Este no es tu regalo 🎁' : 'Error del servidor. Intenta de nuevo.');
+    }catch{ showErr('#passErr','No hay conexión con el servidor.'); }
+    setBusy(btn,false);
   };
 
   /* ---------- Formulario ---------- */
-  function compress(file, max=640, q=0.72){
+  // Las fotos deben caber en una celda de Google Sheets (límite 50 000 caracteres)
+  function compress(file, max=480){
     return new Promise((res,rej)=>{
       const img = new Image(), url = URL.createObjectURL(file);
       img.onload=()=>{
-        const k = Math.min(1, max/Math.max(img.width,img.height));
-        const c = document.createElement('canvas');
-        c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
-        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-        URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg',q));
+        let k = Math.min(1, max/Math.max(img.width,img.height)), out='';
+        for(let t=0;t<6;t++){
+          const c = document.createElement('canvas');
+          c.width=Math.max(1,Math.round(img.width*k)); c.height=Math.max(1,Math.round(img.height*k));
+          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+          out = c.toDataURL('image/jpeg',0.6);
+          if(out.length<=45000) break;
+          k*=0.8;
+        }
+        URL.revokeObjectURL(url);
+        out.length<=45000 ? res(out) : rej(new Error('Imagen muy pesada'));
       };
       img.onerror=()=>rej(new Error('Imagen no válida'));
       img.src=url;
@@ -146,7 +170,7 @@
         <textarea class="nt" rows="2" maxlength="300">${esc(data.note||'')}</textarea>
       </label>
       <div class="row">
-        <img class="prev" alt="" ${data.photo?`src="${data.photo}"`:'hidden'}>
+        <img class="prev" alt="" ${data.photo?`src="${esc(data.photo)}"`:'hidden'}>
         <div class="photo-ctl">Foto de referencia
           <input class="f" type="file" accept="image/*">
         </div>
@@ -163,12 +187,12 @@
   }
 
   function openForm(id=null){
-    editingId=id;
+    editingId=id; if(!id) editPass='';
     const p = id ? people.find(x=>x.id===id) : null;
     $('#formTitle').textContent = p ? 'Editar mi lista' : 'Mi lista de regalos';
     const sel = $('#fName'), taken = new Set(people.map(x=>x.name));
     sel.innerHTML = '<option value="">Elige tu nombre…</option>' +
-      Object.keys(ROSTER).filter(n => p ? n===p.name : !taken.has(n))
+      names.filter(n => p ? n===p.name : !taken.has(n))
         .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
     sel.value = p ? p.name : ''; sel.disabled = !!p;
     $('#passWrap').hidden = !!p; $('#fPass').required = !p; $('#fPass').value='';
@@ -177,10 +201,13 @@
     (p ? p.items : [{}]).forEach(addFormItem);
     $('#formDlg').showModal();
   }
-  $('#btnAdd').onclick=()=>openForm();
+  $('#btnAdd').onclick=()=>{
+    if(!names.length){ alert('Aún no se cargan los datos. Espera un momento e intenta de nuevo.'); return; }
+    openForm();
+  };
   $('#btnMore').onclick=()=>addFormItem();
 
-  $('#form').onsubmit=e=>{
+  $('#form').onsubmit=async e=>{
     e.preventDefault();
     const items = [...document.querySelectorAll('.fitem')].map(n=>({
       title:n.querySelector('.t').value.trim(),
@@ -189,22 +216,20 @@
     })).filter(i=>i.title);
     const name = $('#fName').value.trim();
     if(!name || !items.length) return;
-    if(!editingId){
-      if(!passOk(name, $('#fPass').value)) return showErr('#formErr','Esa contraseña no corresponde a ese nombre.');
-      if(people.some(x=>x.name===name)) return showErr('#formErr','Esa persona ya tiene una lista.');
-    }
-    const backup = JSON.stringify(people);
-    if(editingId){
-      const p = people.find(x=>x.id===editingId); p.name=name; p.items=items;
-    }else{
-      people.push({id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name,items});
-    }
-    if(!Store.save(people)){ people=JSON.parse(backup); return; }
-    renderGifts(); $('#formDlg').close();
+    const password = editingId ? editPass : $('#fPass').value;
+    const btn = $('#form button[type=submit]');
+    $('#formErr').hidden=true; setBusy(btn,true,'Guardando…');
+    try{
+      const r = await api.post({action:'save',name,password,items});
+      if(r.ok){ await load(); $('#formDlg').close(); }
+      else showErr('#formErr', r.error==='clave' ? 'Esa contraseña no corresponde a ese nombre.' : 'No se pudo guardar. Intenta de nuevo.');
+    }catch{ showErr('#formErr','No hay conexión con el servidor.'); }
+    setBusy(btn,false);
   };
 
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
   document.querySelectorAll('dialog:not(.photo)').forEach(d=>d.addEventListener('click',e=>{ if(e.target===d) d.close(); }));
 
-  renderGifts();
+  $('#empty').textContent='Cargando regalos…'; $('#empty').hidden=false;
+  load();
 })();
