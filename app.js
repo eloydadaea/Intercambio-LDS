@@ -136,24 +136,33 @@
   };
 
   /* ---------- Formulario ---------- */
-  // Las fotos deben caber en una celda de Google Sheets (límite 50 000 caracteres)
-  function compress(file, max=480){
+  // Compresión adaptativa: aprovecha al máximo el límite de 50 000 caracteres por celda en Google Sheets
+  function compress(file, max=1100){
     return new Promise((res,rej)=>{
       const img = new Image(), url = URL.createObjectURL(file);
       img.onload=()=>{
+        const LIMIT = 49000;
         let k = Math.min(1, max/Math.max(img.width,img.height)), out='';
-        for(let t=0;t<6;t++){
-          const c = document.createElement('canvas');
-          c.width=Math.max(1,Math.round(img.width*k)); c.height=Math.max(1,Math.round(img.height*k));
-          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-          out = c.toDataURL('image/jpeg',0.6);
-          if(out.length<=45000) break;
-          k*=0.8;
+        const c = document.createElement('canvas');
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        const qualities = [0.82, 0.72, 0.62, 0.52];
+        outer: for(let step=0;step<7;step++){
+          c.width = Math.max(1,Math.round(img.width*k));
+          c.height = Math.max(1,Math.round(img.height*k));
+          ctx.drawImage(img,0,0,c.width,c.height);
+          for(const q of qualities){
+            out = c.toDataURL('image/jpeg',q);
+            if(out.length<=LIMIT) break outer;
+          }
+          k *= 0.82;
         }
         URL.revokeObjectURL(url);
-        out.length<=45000 ? res(out) : rej(new Error('Imagen muy pesada'));
+        out.length<=LIMIT ? res(out) : rej(new Error('Imagen muy pesada'));
       };
-      img.onerror=()=>rej(new Error('Imagen no válida'));
+      img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
       img.src=url;
     });
   }
