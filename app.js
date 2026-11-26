@@ -15,17 +15,199 @@
   const $ = s => document.querySelector(s);
   const EMPTY_TXT = $('#empty').textContent;
 
-  /* ---------- Barra de carga ---------- */
-  const loaderStyle = document.createElement('style');
-  loaderStyle.textContent = `
-    .ld-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(280px,82vw);margin:6px auto 0}
-    .ld-txt{font-size:.95rem;color:#f4f7fb;text-shadow:0 1px 4px rgba(0,0,0,.75);letter-spacing:.2px}
-    .ld-track{width:100%;height:10px;background:rgba(255,255,255,.16);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,.45),0 1px 6px rgba(0,0,0,.35);backdrop-filter:blur(4px)}
-    .ld-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#e04a4a,#ffd54a,#2f9e5b);background-size:200% 100%;animation:ldShimmer 1.6s linear infinite;transition:width .25s ease-out}
-    @keyframes ldShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
-  `;
-  document.head.appendChild(loaderStyle);
+  /* ---------- Cajita de música navideña (Web Audio API) ---------- */
+  const N = {
+    C4:261.63, D4:293.66, E4:329.63, F4:349.23, Fs4:369.99, G4:392.00, A4:440.00, B4:493.88,
+    C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, R:0
+  };
+  const CAROLS = [
+    {
+      title: 'Noche de Paz',
+      tempo: 390,
+      notes: [
+        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
+        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
+        [N.D5,2],[N.D5,1],[N.B4,3],
+        [N.C5,2],[N.C5,1],[N.G4,3],
+        [N.A4,2],[N.A4,1],[N.C5,1.5],[N.B4,.5],[N.A4,1],
+        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
+        [N.A4,2],[N.A4,1],[N.C5,1.5],[N.B4,.5],[N.A4,1],
+        [N.G4,1.5],[N.A4,.5],[N.G4,1],[N.E4,3],
+        [N.D5,2],[N.D5,1],[N.F5,1.5],[N.D5,.5],[N.B4,1],
+        [N.C5,3],[N.E5,3],
+        [N.C5,1.5],[N.G4,.5],[N.E4,1],[N.G4,1.5],[N.F4,.5],[N.D4,1],[N.C4,4],[N.R,2]
+      ]
+    },
+    {
+      title: 'Jingle Bells',
+      tempo: 260,
+      notes: [
+        [N.E5,1],[N.E5,1],[N.E5,2],[N.E5,1],[N.E5,1],[N.E5,2],
+        [N.E5,1],[N.G5,1],[N.C5,1.5],[N.D5,.5],[N.E5,4],
+        [N.F5,1],[N.F5,1],[N.F5,1.5],[N.F5,.5],[N.F5,1],[N.E5,1],[N.E5,1],[N.E5,.5],[N.E5,.5],
+        [N.E5,1],[N.D5,1],[N.D5,1],[N.E5,1],[N.D5,2],[N.G5,2],
+        [N.E5,1],[N.E5,1],[N.E5,2],[N.E5,1],[N.E5,1],[N.E5,2],
+        [N.E5,1],[N.G5,1],[N.C5,1.5],[N.D5,.5],[N.E5,4],
+        [N.F5,1],[N.F5,1],[N.F5,1.5],[N.F5,.5],[N.F5,1],[N.E5,1],[N.E5,1],[N.E5,.5],[N.E5,.5],
+        [N.G5,1],[N.G5,1],[N.F5,1],[N.D5,1],[N.C5,4],[N.R,2]
+      ]
+    },
+    {
+      title: 'Feliz Navidad',
+      tempo: 300,
+      notes: [
+        [N.D4,1],[N.G4,1],[N.G4,.5],[N.A4,.5],[N.G4,.5],[N.Fs4,.5],[N.E4,1],[N.E4,1],
+        [N.E4,1],[N.A4,1],[N.A4,.5],[N.B4,.5],[N.A4,.5],[N.G4,.5],[N.Fs4,1],[N.D4,1],
+        [N.D4,1],[N.B4,1],[N.B4,.5],[N.C5,.5],[N.B4,.5],[N.A4,.5],[N.G4,1],[N.E4,1],
+        [N.D4,.5],[N.D4,.5],[N.E4,1],[N.A4,1],[N.Fs4,1],[N.G4,3],[N.R,2]
+      ]
+    }
+  ];
 
+  let audioCtx = null, masterGain = null, musicTimer = null;
+  let musicPlaying = false, userMuted = false, songIdx = 0, noteIdx = 0;
+
+  const musicBox = document.createElement('div');
+  musicBox.className = 'music-ctl';
+  musicBox.innerHTML = `
+    <button type="button" class="music-btn" id="btnMusic" aria-label="Música navideña">🔇 Activar música</button>
+    <button type="button" class="music-btn music-skip" id="btnNextSong" title="Siguiente villancico" hidden>⏭</button>
+  `;
+  document.body.appendChild(musicBox);
+
+  function updateMusicUI(){
+    const btn = $('#btnMusic'), skip = $('#btnNextSong');
+    if (musicPlaying){
+      btn.textContent = `🎵 ${CAROLS[songIdx].title}`;
+      skip.hidden = false;
+    } else {
+      btn.textContent = '🔇 Activar música';
+      skip.hidden = true;
+    }
+  }
+
+  function initAudio(){
+    if (audioCtx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+
+    // Efecto eco suave de cajita de música
+    const delay = audioCtx.createDelay();
+    delay.delayTime.value = 0.26;
+    const feedback = audioCtx.createGain();
+    feedback.gain.value = 0.22;
+    delay.connect(feedback);
+    feedback.connect(delay);
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.14;
+    masterGain.connect(audioCtx.destination);
+    masterGain.connect(delay);
+    delay.connect(audioCtx.destination);
+  }
+
+  function playChime(freq, durSec){
+    if (!audioCtx || !freq) return;
+    const now = audioCtx.currentTime;
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const env = audioCtx.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(freq, now);
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(freq * 2, now); // armónico brillante de campana
+
+    const subGain = audioCtx.createGain();
+    subGain.gain.value = 0.18;
+
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(0.85, now + 0.018);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.35, durSec * 1.45));
+
+    osc1.connect(env);
+    osc2.connect(subGain);
+    subGain.connect(env);
+    env.connect(masterGain);
+
+    osc1.start(now);
+    osc2.start(now);
+    const stopAt = now + Math.max(0.4, durSec * 1.5);
+    osc1.stop(stopAt);
+    osc2.stop(stopAt);
+  }
+
+  function scheduleNextNote(){
+    clearTimeout(musicTimer);
+    if (!musicPlaying || document.hidden) return;
+    const song = CAROLS[songIdx];
+    const [freq, beats] = song.notes[noteIdx];
+    const ms = beats * song.tempo;
+
+    playChime(freq, ms / 1000);
+
+    noteIdx++;
+    if (noteIdx >= song.notes.length){
+      noteIdx = 0;
+      songIdx = (songIdx + 1) % CAROLS.length;
+      updateMusicUI();
+    }
+    musicTimer = setTimeout(scheduleNextNote, ms);
+  }
+
+  async function startMusic(){
+    if (userMuted) return;
+    initAudio();
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended'){
+      try { await audioCtx.resume(); } catch { return; }
+    }
+    if (audioCtx.state !== 'running') return;
+    if (!musicPlaying){
+      musicPlaying = true;
+      updateMusicUI();
+      scheduleNextNote();
+    }
+  }
+
+  function stopMusic(){
+    musicPlaying = false;
+    clearTimeout(musicTimer);
+    updateMusicUI();
+  }
+
+  $('#btnMusic').onclick = async e => {
+    e.stopPropagation();
+    if (musicPlaying){
+      userMuted = true;
+      stopMusic();
+    } else {
+      userMuted = false;
+      await startMusic();
+    }
+  };
+
+  $('#btnNextSong').onclick = async e => {
+    e.stopPropagation();
+    clearTimeout(musicTimer);
+    songIdx = (songIdx + 1) % CAROLS.length;
+    noteIdx = 0;
+    userMuted = false;
+    if (!musicPlaying) await startMusic();
+    else { updateMusicUI(); scheduleNextNote(); }
+  };
+
+  // Arranca automáticamente al primer clic o tecla del usuario
+  ['pointerdown','keydown'].forEach(ev => {
+    document.addEventListener(ev, () => { if (!userMuted && !musicPlaying) startMusic(); }, { once: true });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) clearTimeout(musicTimer);
+    else if (musicPlaying) scheduleNextNote();
+  });
+
+  /* ---------- Barra de carga ---------- */
   let loadTimer = null;
   function startLoader(){
     const el = $('#empty');
@@ -136,6 +318,8 @@
   }
 
   /* ---------- Ver lista ---------- */
+  $('#btnEdit').textContent = '✏️ Editar mi lista';
+
   function openView(id){
     const p = people.find(x=>x.id===id); if(!p) return;
     currentId=id;
@@ -144,14 +328,30 @@
     const wrap = $('#viewItems'); wrap.innerHTML='';
     p.items.forEach(it=>{
       const d = document.createElement('div'); d.className='item';
-      d.innerHTML = (it.photo ? `<img src="${esc(it.photo)}" alt="${esc(it.title)}">` : `<div class="ph">🎀</div>`) +
-        `<div><h3>${esc(it.title)}</h3>${it.note?`<p>${linkify(it.note)}</p>`:''}</div>`;
-      const img = d.querySelector('img'); if(img) img.onclick=()=>showPhoto(it.photo,it.title);
+      const photoHtml = it.photo
+        ? `<div class="thumb-wrap" title="Toca para ampliar"><img src="${esc(it.photo)}" alt="${esc(it.title)}"><span class="zoom-badge">🔍</span></div>`
+        : `<div class="ph">🎀</div>`;
+      d.innerHTML = `${photoHtml}<div><h3>${esc(it.title)}</h3>${it.note?`<p>${linkify(it.note)}</p>`:''}</div>`;
+      const thumb = d.querySelector('.thumb-wrap');
+      if(thumb) thumb.onclick=()=>showPhoto(it.photo,it.title);
       wrap.appendChild(d);
     });
     $('#viewDlg').showModal();
   }
-  function showPhoto(src,alt){ $('#bigPhoto').src=src; $('#bigPhoto').alt=alt; $('#photoDlg').showModal(); }
+
+  function showPhoto(src,alt){
+    const dlg = $('#photoDlg');
+    $('#bigPhoto').src=src;
+    $('#bigPhoto').alt=alt;
+    let cap = dlg.querySelector('.photo-cap');
+    if(!cap){
+      cap = document.createElement('div');
+      cap.className = 'photo-cap';
+      dlg.appendChild(cap);
+    }
+    cap.textContent = `${alt} · Toca para cerrar`;
+    dlg.showModal();
+  }
   $('#photoDlg').onclick=()=>$('#photoDlg').close();
 
   /* ---------- Editar (pide contraseña al servidor) ---------- */
