@@ -92,7 +92,6 @@
     if (!AC) return;
     audioCtx = new AC();
 
-    // Efecto eco suave de cajita de música
     const delay = audioCtx.createDelay();
     delay.delayTime.value = 0.26;
     const feedback = audioCtx.createGain();
@@ -117,7 +116,7 @@
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(freq, now);
     osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(freq * 2, now); // armónico brillante de campana
+    osc2.frequency.setValueAtTime(freq * 2, now);
 
     const subGain = audioCtx.createGain();
     subGain.gain.value = 0.18;
@@ -198,7 +197,6 @@
     else { updateMusicUI(); scheduleNextNote(); }
   };
 
-  // Arranca automáticamente al primer clic o tecla del usuario
   ['pointerdown','keydown'].forEach(ev => {
     document.addEventListener(ev, () => { if (!userMuted && !musicPlaying) startMusic(); }, { once: true });
   });
@@ -318,19 +316,19 @@
   }
 
   /* ---------- Ver lista ---------- */
-  $('#btnEdit').textContent = '✏️ Editar mi lista';
+  $('#btnEdit').textContent = 'Editar mi lista';
 
   function openView(id){
     const p = people.find(x=>x.id===id); if(!p) return;
     currentId=id;
-    $('#viewName').textContent = `🎁 ${p.name}`;
+    $('#viewName').textContent = p.name;
     $('#viewCount').textContent = p.items.length===1 ? '1 regalo en su lista' : `${p.items.length} regalos en su lista`;
     const wrap = $('#viewItems'); wrap.innerHTML='';
     p.items.forEach(it=>{
       const d = document.createElement('div'); d.className='item';
       const photoHtml = it.photo
-        ? `<div class="thumb-wrap" title="Toca para ampliar"><img src="${esc(it.photo)}" alt="${esc(it.title)}"><span class="zoom-badge">🔍</span></div>`
-        : `<div class="ph">🎀</div>`;
+        ? `<div class="thumb-wrap" title="Toca para ampliar"><img src="${esc(it.photo)}" alt="${esc(it.title)}"></div>`
+        : `<div class="ph">🎁</div>`;
       d.innerHTML = `${photoHtml}<div><h3>${esc(it.title)}</h3>${it.note?`<p>${linkify(it.note)}</p>`:''}</div>`;
       const thumb = d.querySelector('.thumb-wrap');
       if(thumb) thumb.onclick=()=>showPhoto(it.photo,it.title);
