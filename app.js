@@ -1,6 +1,6 @@
 (() => {
   /* ===== Pega aquí la URL de tu Apps Script (termina en /exec) ===== */
-  const API_URL = 'PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT';
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyFssSXFPO1qPPXybpC6hnF6iy6tDo3iiNDhLPbQEOqx2-XV4kJ7FW3O2y47-ZF3c_h/exec';
 
   const PAPERS = [
     {p:'#2a7fa8',pat:'radial-gradient(circle at 25% 30%,#ffffff55 2.5px,transparent 3.5px),radial-gradient(circle at 75% 70%,#ffd54a88 2.5px,transparent 3.5px)',ps:'20px 20px',r:['#e6b93c','#ffd54a']},
