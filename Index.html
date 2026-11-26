@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Árbol de regalos · Intercambio navideño LDS</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{ background:#0b1d3a; }
+  body::before{
+    content:""; position:fixed; inset:0; z-index:-1;
+    background:
+      linear-gradient(#0b1d3acc,#0b1d3a99 40%,#0b1d3acc),
+      url('cabaña.jpg') center/cover no-repeat;
+  }
+  dialog{ max-height:90dvh; }
+</style>
+</head>
+<body>
+<div id="snow" aria-hidden="true"></div>
+
+<header class="top">
+  <h1>Intercambio navideño</h1>
+  <p>Toca un regalo del árbol para ver qué le gustaría recibir a cada compañero.</p>
+  <button class="btn primary" id="btnAdd">＋ Agregar mi lista</button>
+</header>
+
+<main class="stage">
+  <svg id="tree" viewBox="0 0 400 460" role="img" aria-label="Árbol de Navidad">
+    <defs>
+      <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#2f9e5b"/><stop offset="1" stop-color="#17663a"/>
+      </linearGradient>
+      <radialGradient id="glow"><stop offset="0" stop-color="#ffe27a" stop-opacity=".9"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></radialGradient>
+    </defs>
+    <circle cx="200" cy="38" r="40" fill="url(#glow)"/>
+    <rect x="178" y="390" width="44" height="50" rx="4" fill="#6b4226"/>
+    <polygon points="200,200 60,400 340,400" fill="url(#g1)"/>
+    <polygon points="200,110 85,300 315,300" fill="url(#g1)" stroke="#0f4d2b" stroke-width="1"/>
+    <polygon points="200,40 120,200 280,200" fill="url(#g1)" stroke="#0f4d2b" stroke-width="1"/>
+    <polygon id="star" points="200,10 207,30 228,30 211,43 217,63 200,51 183,63 189,43 172,30 193,30" fill="#ffd54a" stroke="#f5b700" stroke-width="2"/>
+    <g id="lights"></g>
+  </svg>
+
+  <div class="gifts" id="gifts"></div>
+  <p class="empty" id="empty">Aún no hay regalos bajo el árbol. ¡Sé el primero en agregar tu lista!</p>
+</main>
+
+<!-- Ver lista -->
+<dialog id="viewDlg">
+  <div class="dlg-head">
+    <h2 id="viewName"></h2>
+    <button class="icon" data-close aria-label="Cerrar">✕</button>
+  </div>
+  <p class="sub" id="viewCount"></p>
+  <div id="viewItems" class="items"></div>
+  <div class="dlg-foot">
+    <button class="btn" id="btnEdit">Editar mi lista</button>
+  </div>
+</dialog>
+
+<!-- Formulario -->
+<dialog id="formDlg">
+  <form id="form" method="dialog">
+    <div class="dlg-head">
+      <h2 id="formTitle">Mi lista de regalos</h2>
+      <button type="button" class="icon" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <label class="field">Tu nombre
+      <select id="fName" required><option value="">Elige tu nombre…</option></select>
+    </label>
+    <label class="field" id="passWrap">Tu contraseña
+      <input id="fPass" type="password" autocomplete="off" placeholder="La que te dieron">
+    </label>
+    <div id="formItems"></div>
+    <button type="button" class="btn ghost" id="btnMore">＋ Agregar otro regalo</button>
+    <p class="err" id="formErr" hidden></p>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-close>Cancelar</button>
+      <button type="submit" class="btn primary">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Contraseña para editar -->
+<dialog id="passDlg">
+  <form id="passForm" method="dialog">
+    <div class="dlg-head">
+      <h2>Editar lista</h2>
+      <button type="button" class="icon" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <p class="sub" id="passSub"></p>
+    <label class="field" style="margin-top:0">Contraseña
+      <input id="pPass" type="password" required autocomplete="off">
+    </label>
+    <p class="err" id="passErr" hidden></p>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-close>Cancelar</button>
+      <button type="submit" class="btn primary">Continuar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Foto ampliada -->
+<dialog id="photoDlg" class="photo"><img id="bigPhoto" alt=""></dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
